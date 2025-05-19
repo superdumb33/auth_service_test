@@ -9,14 +9,17 @@ import (
 	"github.com/google/uuid"
 	"github.com/superdumb33/auth-service-test/internal/entities"
 	"github.com/superdumb33/auth-service-test/internal/token"
+	"golang.org/x/crypto/bcrypt"
 )
 
 var (
-	ErrInternal = entities.ErrInternal
+	ErrInternal     = entities.ErrInternal
+	ErrRevoked      = entities.ErrRevoked
+	ErrUnauthorized = entities.ErrUnauthorized
 )
 
 type Tokens struct {
-	AccessToken string
+	AccessToken  string
 	RefreshToken string
 }
 
@@ -24,18 +27,22 @@ type AuthRepo interface {
 	Create(ctx context.Context, rt *entities.RefreshToken) error
 	GetTokenByID(ctx context.Context, id uuid.UUID) (*entities.RefreshToken, error)
 	Revoke(ctx context.Context, id uuid.UUID) error
-	RevokeAllByUserID (ctx context.Context, userID uuid.UUID) error
+	RevokeAllByUserID(ctx context.Context, userID uuid.UUID) error
+}
 
+type HTTPClient interface {
+	NotifyIPChange(ctx context.Context, userID uuid.UUID, oldIP, newIP string)
 }
 
 type AuthService struct {
-	accesTTL time.Duration
+	accesTTL   time.Duration
 	refreshTTL time.Duration
-	repo AuthRepo
+	repo       AuthRepo
+	client     HTTPClient
 }
 
-func NewAuthService(repo AuthRepo, accessTTL, refreshTTL time.Duration) *AuthService {
-	return &AuthService{repo: repo, accesTTL: accessTTL, refreshTTL: refreshTTL}
+func NewAuthService(repo AuthRepo, accessTTL, refreshTTL time.Duration, client HTTPClient) *AuthService {
+	return &AuthService{repo: repo, accesTTL: accessTTL, refreshTTL: refreshTTL, client: client}
 }
 
 func (as *AuthService) GenerateTokens(ctx context.Context, userID uuid.UUID, userIP, userAgent string) (Tokens, error) {
@@ -45,15 +52,15 @@ func (as *AuthService) GenerateTokens(ctx context.Context, userID uuid.UUID, use
 		return Tokens{}, fmt.Errorf("%s:%w", op, err)
 	}
 
-	refreshTokenHash, err := token.GenerateBCryptHash(refreshToken) 
+	refreshTokenHash, err := token.GenerateBCryptHash(refreshToken)
 	if err != nil {
 		return Tokens{}, fmt.Errorf("%s:%w", op, err)
 	}
 
 	rt := &entities.RefreshToken{
-		UserID: userID,
-		Hash: string(refreshTokenHash),
-		IssuedAt: time.Now(),
+		UserID:    userID,
+		Hash:      string(refreshTokenHash),
+		IssuedAt:  time.Now(),
 		ExpiresAt: time.Now().Add(as.refreshTTL),
 		UserAgent: userAgent,
 		IPAddress: userIP,
@@ -68,13 +75,13 @@ func (as *AuthService) GenerateTokens(ctx context.Context, userID uuid.UUID, use
 	}
 
 	return Tokens{
-		AccessToken: accesToken,
+		AccessToken:  accesToken,
 		RefreshToken: refreshToken,
 	}, nil
 
 }
 
-func (as *AuthService) Refresh (ctx context.Context, accessToken, refreshToken, userIP , userAgent string) (Tokens, error) {
+func (as *AuthService) Refresh(ctx context.Context, accessToken, refreshToken, userIP, userAgent string) (Tokens, error) {
 	const op = "service:Refresh"
 	jwtToken, err := token.ParseJWTToken(accessToken, true)
 	if err != nil {
@@ -92,16 +99,37 @@ func (as *AuthService) Refresh (ctx context.Context, accessToken, refreshToken, 
 		return Tokens{}, err
 	}
 
-	if err := token.VerifyRefreshToken(refreshToken, session.Hash); err != nil {
-		return Tokens{}, fmt.Errorf("%s:%w", op, err)
+	if session.Revoked {
+		return Tokens{}, ErrRevoked
+	}
+
+	if userAgent != session.UserAgent {
+		if err := as.repo.Revoke(ctx, session.ID); err != nil {
+			return Tokens{}, err
+		}
+		return Tokens{}, fmt.Errorf("%s:%w", op, ErrUnauthorized)
 	}
 	//if refresh token is expired - error is returned and the session is marked as revoked
-	if time.Now().After(session.ExpiresAt) || userAgent != session.UserAgent {
+	if time.Now().After(session.ExpiresAt) {
 		as.repo.Revoke(ctx, session.ID)
-		//REPLACE ERR
 		return Tokens{}, fmt.Errorf("%s:%w", op, entities.ErrExpired)
 	}
 
+	if err := token.VerifyRefreshToken(refreshToken, session.Hash); err != nil {
+		if err == bcrypt.ErrMismatchedHashAndPassword {
+			if err := as.repo.Revoke(ctx, session.ID); err != nil {
+				return Tokens{}, err
+			}
+		}
+
+		return Tokens{}, fmt.Errorf("%s:%w", op, err)
+	}
+
+	if session.IPAddress != userIP {
+		go as.client.NotifyIPChange(ctx, session.UserID, session.IPAddress, userIP)
+	}
+
+	//revoking old session. it's better to use trx to do this
 	if err := as.repo.Revoke(ctx, session.ID); err != nil {
 		return Tokens{}, err
 	}
@@ -116,11 +144,10 @@ func (as *AuthService) Refresh (ctx context.Context, accessToken, refreshToken, 
 		return Tokens{}, fmt.Errorf("%s:%w", op, err)
 	}
 
-	
 	rt := &entities.RefreshToken{
-		UserID: session.UserID,
-		Hash: string(newHash),
-		IssuedAt: time.Now(),
+		UserID:    session.UserID,
+		Hash:      string(newHash),
+		IssuedAt:  time.Now(),
 		ExpiresAt: time.Now().Add(as.refreshTTL),
 		UserAgent: session.UserAgent,
 		IPAddress: userIP,
@@ -135,15 +162,15 @@ func (as *AuthService) Refresh (ctx context.Context, accessToken, refreshToken, 
 	}
 
 	return Tokens{
-		AccessToken: newAccessToken,
+		AccessToken:  newAccessToken,
 		RefreshToken: newRefreshToken,
 	}, nil
 }
 
-func (as *AuthService) Logout (ctx context.Context, jti uuid.UUID) error {
+func (as *AuthService) Logout(ctx context.Context, jti uuid.UUID) error {
 	return as.repo.Revoke(ctx, jti)
 }
 
-func (as *AuthService) RevokeAllByUserID (ctx context.Context, userID uuid.UUID) error {
+func (as *AuthService) RevokeAllByUserID(ctx context.Context, userID uuid.UUID) error {
 	return as.repo.RevokeAllByUserID(ctx, userID)
 }

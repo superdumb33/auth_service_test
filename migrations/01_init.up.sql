@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS refresh_tokens (
     issued_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
     expires_at    TIMESTAMPTZ NOT NULL,
     user_agent    TEXT        NOT NULL,
-    ip_address    INET        NOT NULL,
+    ip_address    TEXT        NOT NULL,
     revoked       BOOLEAN     NOT NULL DEFAULT FALSE,
     replaced_by   UUID
 );

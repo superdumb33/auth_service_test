@@ -14,6 +14,7 @@ import (
 
 var (
 	ErrUnauthorized = entities.ErrUnauthorized
+	ErrExpired = entities.ErrExpired
 )
 
 func AuthMiddleware(repo services.AuthRepo) fiber.Handler {
@@ -26,6 +27,9 @@ func AuthMiddleware(repo services.AuthRepo) fiber.Handler {
 
 		token, err := token.ParseJWTToken(tokenString, false)
 		if err != nil || !token.Valid {
+			if err == jwt.ErrTokenExpired {
+				return fmt.Errorf("%s:%w", op, ErrExpired)
+			}
 			return fmt.Errorf("%s:%w", op, ErrUnauthorized)
 		}
 

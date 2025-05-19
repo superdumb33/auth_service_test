@@ -27,7 +27,7 @@ func (ac *AuthController) RegisterRoutes(router fiber.Router, authMiddleware fib
 	authRouter.Post("/issue", ac.Issue)
 	authRouter.Post("/refresh", ac.Refresh)
 
-	authRouterProtected := authRouter.Group("/", authMiddleware)
+	authRouterProtected := router.Group("/auth", authMiddleware)
 	authRouterProtected.Get("/me", ac.GetCurrentUserID)
 	authRouterProtected.Post("/logout", ac.Logout)
 }
@@ -104,6 +104,7 @@ func (ac *AuthController) Logout(c *fiber.Ctx) error {
 	return c.SendStatus(204)
 }
 
+//can be used to revoke all tokens; for example - after password change
 func (ac *AuthController) RevokeAllTokens(c *fiber.Ctx) error {
 	//const op = "controller:RevokeAllTokens"
 	userID := c.Locals("userid").(uuid.UUID)

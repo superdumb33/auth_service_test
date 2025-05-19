@@ -14,7 +14,9 @@ import (
 	"runtime/debug"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/recover"
+	_ "github.com/superdumb33/auth-service-test/docs"
 	"github.com/superdumb33/auth-service-test/internal/config"
 	"github.com/superdumb33/auth-service-test/internal/controllers"
 	"github.com/superdumb33/auth-service-test/internal/infrastructure/database"
@@ -22,8 +24,6 @@ import (
 	webhookclient "github.com/superdumb33/auth-service-test/internal/infrastructure/webhook_client"
 	"github.com/superdumb33/auth-service-test/internal/services"
 	fiberSwagger "github.com/swaggo/fiber-swagger"
-	_ "github.com/superdumb33/auth-service-test/docs"
-
 )
 
 type App struct {
@@ -42,8 +42,12 @@ func New(cfg config.AppCfg, log *slog.Logger) *App {
 	server := fiber.New(fiber.Config{
 		ErrorHandler: controllers.ErrHandler,
 	})
+	server.Use(cors.New(cors.Config{
+		AllowOrigins: "*",
+		AllowHeaders: "Origin, Content-Type, Accept, Authorization",
+	}))
 	server.Get("/swagger/*", fiberSwagger.WrapHandler)
-	server.Use("/", recover.New(recover.Config{
+	server.Use(recover.New(recover.Config{
 		EnableStackTrace: true,
 		StackTraceHandler: func(c *fiber.Ctx, e interface{}) {
 			log.Error("recovered from panic:", e,
@@ -51,7 +55,7 @@ func New(cfg config.AppCfg, log *slog.Logger) *App {
 			)
 		},
 	}))
-	server.Use("/", controllers.LoggingHandler(log))
+	server.Use(controllers.LoggingHandler(log))
 	apiRouter := server.Group("/api/v" + cfg.ApiVersion)
 	authController.RegisterRoutes(apiRouter, controllers.AuthMiddleware(authRepo))
 

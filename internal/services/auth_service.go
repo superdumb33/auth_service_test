@@ -13,9 +13,17 @@ import (
 )
 
 var (
+	//errors
 	ErrInternal     = entities.ErrInternal
 	ErrRevoked      = entities.ErrRevoked
 	ErrUnauthorized = entities.ErrUnauthorized
+
+	//funcs
+	GenerateAccessToken = token.GenerateAccessToken
+	GenerateRefreshToken = token.GenerateRefreshToken
+	GenerateBCryptHash = token.GenerateBCryptHash
+	VerifyRefreshToken = token.VerifyRefreshToken
+	ParseJWTToken = token.ParseJWTToken
 )
 
 type Tokens struct {
@@ -47,12 +55,12 @@ func NewAuthService(repo AuthRepo, accessTTL, refreshTTL time.Duration, client H
 
 func (as *AuthService) GenerateTokens(ctx context.Context, userID uuid.UUID, userIP, userAgent string) (Tokens, error) {
 	const op = "service:GenerateTokens"
-	refreshToken, err := token.GenerateRefreshToken()
+	refreshToken, err := GenerateRefreshToken()
 	if err != nil {
 		return Tokens{}, fmt.Errorf("%s:%w", op, err)
 	}
 
-	refreshTokenHash, err := token.GenerateBCryptHash(refreshToken)
+	refreshTokenHash, err := GenerateBCryptHash(refreshToken)
 	if err != nil {
 		return Tokens{}, fmt.Errorf("%s:%w", op, err)
 	}
@@ -69,7 +77,7 @@ func (as *AuthService) GenerateTokens(ctx context.Context, userID uuid.UUID, use
 		return Tokens{}, err
 	}
 
-	accesToken, err := token.GenerateAccessToken(rt.ID.String(), as.accesTTL)
+	accesToken, err := GenerateAccessToken(rt.ID.String(), as.accesTTL)
 	if err != nil {
 		return Tokens{}, fmt.Errorf("%s:%w", op, err)
 	}
@@ -83,7 +91,7 @@ func (as *AuthService) GenerateTokens(ctx context.Context, userID uuid.UUID, use
 
 func (as *AuthService) Refresh(ctx context.Context, accessToken, refreshToken, userIP, userAgent string) (Tokens, error) {
 	const op = "service:Refresh"
-	jwtToken, err := token.ParseJWTToken(accessToken, true)
+	jwtToken, err := ParseJWTToken(accessToken, true)
 	if err != nil {
 		return Tokens{}, fmt.Errorf("%s:%w", op, err)
 	}
@@ -115,7 +123,7 @@ func (as *AuthService) Refresh(ctx context.Context, accessToken, refreshToken, u
 		return Tokens{}, fmt.Errorf("%s:%w", op, entities.ErrExpired)
 	}
 
-	if err := token.VerifyRefreshToken(refreshToken, session.Hash); err != nil {
+	if err := VerifyRefreshToken(refreshToken, session.Hash); err != nil {
 		if err == bcrypt.ErrMismatchedHashAndPassword {
 			if err := as.repo.Revoke(ctx, session.ID); err != nil {
 				return Tokens{}, err
@@ -134,12 +142,12 @@ func (as *AuthService) Refresh(ctx context.Context, accessToken, refreshToken, u
 		return Tokens{}, err
 	}
 
-	newRefreshToken, err := token.GenerateRefreshToken()
+	newRefreshToken, err := GenerateRefreshToken()
 	if err != nil {
 		return Tokens{}, fmt.Errorf("%s:%w", op, err)
 	}
 
-	newHash, err := token.GenerateBCryptHash(newRefreshToken)
+	newHash, err := GenerateBCryptHash(newRefreshToken)
 	if err != nil {
 		return Tokens{}, fmt.Errorf("%s:%w", op, err)
 	}
@@ -156,7 +164,7 @@ func (as *AuthService) Refresh(ctx context.Context, accessToken, refreshToken, u
 		return Tokens{}, err
 	}
 
-	newAccessToken, err := token.GenerateAccessToken(rt.ID.String(), as.accesTTL)
+	newAccessToken, err := GenerateAccessToken(rt.ID.String(), as.accesTTL)
 	if err != nil {
 		return Tokens{}, fmt.Errorf("%s:%w", op, err)
 	}

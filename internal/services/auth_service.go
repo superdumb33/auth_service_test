@@ -2,12 +2,17 @@ package services
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/google/uuid"
 	"github.com/superdumb33/auth-service-test/internal/entities"
 	"github.com/superdumb33/auth-service-test/internal/token"
+)
+
+var (
+	ErrInternal = entities.ErrInternal
 )
 
 type Tokens struct {
@@ -19,6 +24,7 @@ type AuthRepo interface {
 	Create(ctx context.Context, rt *entities.RefreshToken) error
 	GetTokenByID(ctx context.Context, id uuid.UUID) (*entities.RefreshToken, error)
 	Revoke(ctx context.Context, id uuid.UUID) error
+	RevokeAllByUserID (ctx context.Context, userID uuid.UUID) error
 
 }
 
@@ -33,14 +39,15 @@ func NewAuthService(repo AuthRepo, accessTTL, refreshTTL time.Duration) *AuthSer
 }
 
 func (as *AuthService) GenerateTokens(ctx context.Context, userID uuid.UUID, userIP, userAgent string) (Tokens, error) {
+	const op = "service:GenerateTokens"
 	refreshToken, err := token.GenerateRefreshToken()
 	if err != nil {
-		return Tokens{}, err
+		return Tokens{}, fmt.Errorf("%s:%w", op, err)
 	}
 
 	refreshTokenHash, err := token.GenerateBCryptHash(refreshToken) 
 	if err != nil {
-		return Tokens{}, err
+		return Tokens{}, fmt.Errorf("%s:%w", op, err)
 	}
 
 	rt := &entities.RefreshToken{
@@ -57,7 +64,7 @@ func (as *AuthService) GenerateTokens(ctx context.Context, userID uuid.UUID, use
 
 	accesToken, err := token.GenerateAccessToken(rt.ID.String(), as.accesTTL)
 	if err != nil {
-		return Tokens{}, err
+		return Tokens{}, fmt.Errorf("%s:%w", op, err)
 	}
 
 	return Tokens{
@@ -68,15 +75,16 @@ func (as *AuthService) GenerateTokens(ctx context.Context, userID uuid.UUID, use
 }
 
 func (as *AuthService) Refresh (ctx context.Context, accessToken, refreshToken, userIP , userAgent string) (Tokens, error) {
+	const op = "service:Refresh"
 	jwtToken, err := token.ParseJWTToken(accessToken, true)
 	if err != nil {
-		return Tokens{}, err
+		return Tokens{}, fmt.Errorf("%s:%w", op, err)
 	}
 	claims := jwtToken.Claims.(jwt.MapClaims)
 	jti := claims["jti"].(string)
 	parsedJTI, err := uuid.Parse(jti)
 	if err != nil {
-		return Tokens{}, err
+		return Tokens{}, fmt.Errorf("%s:%w", op, err)
 	}
 
 	session, err := as.repo.GetTokenByID(ctx, parsedJTI)
@@ -85,13 +93,13 @@ func (as *AuthService) Refresh (ctx context.Context, accessToken, refreshToken, 
 	}
 
 	if err := token.VerifyRefreshToken(refreshToken, session.Hash); err != nil {
-		return Tokens{}, err
+		return Tokens{}, fmt.Errorf("%s:%w", op, err)
 	}
 	//if refresh token is expired - error is returned and the session is marked as revoked
 	if time.Now().After(session.ExpiresAt) || userAgent != session.UserAgent {
 		as.repo.Revoke(ctx, session.ID)
 		//REPLACE ERR
-		return Tokens{}, err
+		return Tokens{}, fmt.Errorf("%s:%w", op, entities.ErrExpired)
 	}
 
 	if err := as.repo.Revoke(ctx, session.ID); err != nil {
@@ -100,12 +108,12 @@ func (as *AuthService) Refresh (ctx context.Context, accessToken, refreshToken, 
 
 	newRefreshToken, err := token.GenerateRefreshToken()
 	if err != nil {
-		return Tokens{}, err
+		return Tokens{}, fmt.Errorf("%s:%w", op, err)
 	}
 
 	newHash, err := token.GenerateBCryptHash(newRefreshToken)
 	if err != nil {
-		return Tokens{}, err
+		return Tokens{}, fmt.Errorf("%s:%w", op, err)
 	}
 
 	
@@ -123,7 +131,7 @@ func (as *AuthService) Refresh (ctx context.Context, accessToken, refreshToken, 
 
 	newAccessToken, err := token.GenerateAccessToken(rt.ID.String(), as.accesTTL)
 	if err != nil {
-		return Tokens{}, err
+		return Tokens{}, fmt.Errorf("%s:%w", op, err)
 	}
 
 	return Tokens{
@@ -134,4 +142,8 @@ func (as *AuthService) Refresh (ctx context.Context, accessToken, refreshToken, 
 
 func (as *AuthService) Logout (ctx context.Context, jti uuid.UUID) error {
 	return as.repo.Revoke(ctx, jti)
+}
+
+func (as *AuthService) RevokeAllByUserID (ctx context.Context, userID uuid.UUID) error {
+	return as.repo.RevokeAllByUserID(ctx, userID)
 }

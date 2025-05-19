@@ -1,32 +1,39 @@
 package controllers
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/google/uuid"
+	"github.com/superdumb33/auth-service-test/internal/entities"
 	"github.com/superdumb33/auth-service-test/internal/services"
 	"github.com/superdumb33/auth-service-test/internal/token"
 )
 
+var (
+	ErrUnauthorized = entities.ErrUnauthorized
+)
+
 func AuthMiddleware(repo services.AuthRepo) fiber.Handler {
 	return func(c *fiber.Ctx) error {
+		const op = "authmiddleware:"
 		tokenString := strings.TrimPrefix(c.Get("Authorization"), "Bearer ")
 		if tokenString == "" {
-			return c.Status(401).SendString("empty authorization header")
+			return fmt.Errorf("%s:%w", op, ErrUnauthorized)
 		}
 
 		token, err := token.ParseJWTToken(tokenString, false)
 		if err != nil || !token.Valid {
-			return c.Status(401).SendString("Unauthorized")
+			return fmt.Errorf("%s:%w", op, ErrUnauthorized)
 		}
 
 		claims := token.Claims.(jwt.MapClaims)
 		jtiString := claims["jti"].(string)
 		jti, err := uuid.Parse(jtiString)
 		if err != nil {
-			return c.Status(401).SendString("Unauthorized")
+			return fmt.Errorf("%s:%w", op, ErrUnauthorized)
 		}
 
 		session, err := repo.GetTokenByID(c.Context(), jti)
@@ -35,19 +42,15 @@ func AuthMiddleware(repo services.AuthRepo) fiber.Handler {
 		}
 
 		if session == nil || session.Revoked {
-			return c.Status(401).SendString("Unauthorized: session revoked")
+			return fmt.Errorf("%s:%w", op, ErrUnauthorized)
 		}
 
 		if session.UserAgent != c.Get("User-Agent") {
 			if err := repo.Revoke(c.Context(), session.ID); err != nil {
-				return c.Status(500).JSON(fiber.Map{
-					"error": "Internal server error",
-				})
+				return err
 			}
 
-			return c.Status(401).JSON(fiber.Map{
-				"error": "user-agent change detected, session revoked",
-			})
+			return fmt.Errorf("%s:%w", op, ErrUnauthorized)
 		}
 
 		c.Locals("userid", session.UserID)

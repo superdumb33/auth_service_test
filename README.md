@@ -175,7 +175,15 @@ curl -X POST http://localhost:3000/api/v1/auth/logout   -H "Authorization: Beare
 
 ## Running Tests
 
+Unit tests covers service logic (like generation and validation) and repository interactions. To run:
+
+**Running all tests:**
 ```bash
 go test -v ./...
 ```
+**Running auth service tests::**
+```bash
+go test -v ./internal/services
+```
+
 ---

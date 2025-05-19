@@ -53,7 +53,7 @@ Authentication service using access/refresh token pair with IP/User-Agent valida
    ```
    
   
-   The service listens on **localhost:3000** by default.
+   The service listens on **localhost:3000** by default, SwaggerUI is available at **http://localhost:3000/swagger/index.html**
 
 ---
 

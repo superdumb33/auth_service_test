@@ -32,6 +32,16 @@ func (ac *AuthController) RegisterRoutes(router fiber.Router, authMiddleware fib
 	authRouterProtected.Post("/logout", ac.Logout)
 }
 
+
+// @Summary   Issue tokens
+// @Tags      auth
+// @Accept    json
+// @Produce   json
+// @Param     user_id   query     string  true  "User GUID"
+// @Success   200       {object}  dto.IssueTokensResponse
+// @Failure   400       {object}  dto.FailureResponse
+// @Failure   500       {object}  dto.FailureResponse
+// @Router    /auth/issue [post]
 func (ac *AuthController) Issue(c *fiber.Ctx) error {
 	const op = "controller:Issue"
 	userID, err := uuid.Parse(c.Query("user_id"))
@@ -59,6 +69,16 @@ func (ac *AuthController) Issue(c *fiber.Ctx) error {
 
 }
 
+// @Summary   Refresh tokens
+// @Tags      auth
+// @Accept    json
+// @Produce   json
+// @Param     body      body      dto.RefreshTokensRequest  true  "Access+Refresh token pair"
+// @Success   200       {object}  dto.RefreshTokensResponse
+// @Failure   400       {object}  dto.FailureResponse
+// @Failure   401       {object}  dto.FailureResponse
+// @Failure   500       {object}  dto.FailureResponse
+// @Router    /auth/refresh [post]
 func (ac *AuthController) Refresh(c *fiber.Ctx) error {
 	const op = "controller:refresh"
 	var request dto.RefreshTokensRequest
@@ -85,6 +105,14 @@ func (ac *AuthController) Refresh(c *fiber.Ctx) error {
 	return c.Status(200).JSON(resp)
 }
 
+// @Summary   Get current user
+// @Tags      auth
+// @Security  ApiKeyAuth
+// @Produce   json
+// @Success   200  {object}  dto.GetCurrentUserIDResponse
+// @Failure   401  {object}  dto.FailureResponse
+// @Router    /auth/me [get]
+// @Security  ApiKeyAuth
 func (ac *AuthController) GetCurrentUserID(c *fiber.Ctx) error {
 	userID := c.Locals("userid").(uuid.UUID)
 
@@ -93,6 +121,13 @@ func (ac *AuthController) GetCurrentUserID(c *fiber.Ctx) error {
 	})
 }
 
+// @Summary   Logout (revoke current session)
+// @Tags      auth
+// @Security  ApiKeyAuth
+// @Success   204
+// @Failure   401  {object}  dto.FailureResponse
+// @Router    /auth/logout [post]
+// @Security  ApiKeyAuth
 func (ac *AuthController) Logout(c *fiber.Ctx) error {
 	//const op = "controller:logout"
 	jti := c.Locals("jti").(uuid.UUID)

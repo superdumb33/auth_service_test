@@ -1,5 +1,14 @@
 package app
 
+// @title           Auth Service API
+// @version         1.0
+// @description     auth service.
+// @host            localhost:3000
+// @BasePath        /api/v1
+// @securityDefinitions.apikey ApiKeyAuth
+// @in header
+// @name Authorization
+
 import (
 	"log/slog"
 	"runtime/debug"
@@ -12,6 +21,9 @@ import (
 	"github.com/superdumb33/auth-service-test/internal/infrastructure/repository/pgxrepo"
 	webhookclient "github.com/superdumb33/auth-service-test/internal/infrastructure/webhook_client"
 	"github.com/superdumb33/auth-service-test/internal/services"
+	fiberSwagger "github.com/swaggo/fiber-swagger"
+	_ "github.com/superdumb33/auth-service-test/docs"
+
 )
 
 type App struct {
@@ -30,12 +42,14 @@ func New(cfg config.AppCfg, log *slog.Logger) *App {
 	server := fiber.New(fiber.Config{
 		ErrorHandler: controllers.ErrHandler,
 	})
+	server.Get("/swagger/*", fiberSwagger.WrapHandler)
 	server.Use("/", recover.New(recover.Config{
 		EnableStackTrace: true,
 		StackTraceHandler: func(c *fiber.Ctx, e interface{}) {
 			log.Error("recovered from panic:", e,
-			"stack", debug.Stack(),
-	)},
+				"stack", debug.Stack(),
+			)
+		},
 	}))
 	server.Use("/", controllers.LoggingHandler(log))
 	apiRouter := server.Group("/api/v" + cfg.ApiVersion)

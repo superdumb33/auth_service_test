@@ -1,0 +1,141 @@
+basePath: /api/v1
+definitions:
+  dto.FailureResponse:
+    properties:
+      error:
+        type: string
+    type: object
+  dto.GetCurrentUserIDResponse:
+    properties:
+      user_id:
+        type: string
+    type: object
+  dto.IssueTokensResponse:
+    properties:
+      access_token:
+        type: string
+      refresh_token:
+        type: string
+    type: object
+  dto.RefreshTokensRequest:
+    properties:
+      access_token:
+        type: string
+      refresh_token:
+        type: string
+    type: object
+  dto.RefreshTokensResponse:
+    properties:
+      access_token:
+        type: string
+      refresh_token:
+        type: string
+    type: object
+host: localhost:3000
+info:
+  contact: {}
+  description: auth service.
+  title: Auth Service API
+  version: "1.0"
+paths:
+  /auth/issue:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: User GUID
+        in: query
+        name: user_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.IssueTokensResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.FailureResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/dto.FailureResponse'
+      summary: Issue tokens
+      tags:
+      - auth
+  /auth/logout:
+    post:
+      responses:
+        "204":
+          description: No Content
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/dto.FailureResponse'
+      security:
+      - ApiKeyAuth: []
+      - ApiKeyAuth: []
+      summary: Logout (revoke current session)
+      tags:
+      - auth
+  /auth/me:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.GetCurrentUserIDResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/dto.FailureResponse'
+      security:
+      - ApiKeyAuth: []
+      - ApiKeyAuth: []
+      summary: Get current user
+      tags:
+      - auth
+  /auth/refresh:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Access+Refresh token pair
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.RefreshTokensRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.RefreshTokensResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.FailureResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/dto.FailureResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/dto.FailureResponse'
+      summary: Refresh tokens
+      tags:
+      - auth
+securityDefinitions:
+  ApiKeyAuth:
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

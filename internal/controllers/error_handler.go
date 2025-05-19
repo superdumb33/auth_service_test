@@ -23,7 +23,7 @@ func ErrHandler(c *fiber.Ctx, err error) error {
 	case errors.Is(err, entities.ErrExpired):
 		return c.Status(http.StatusUnauthorized).
 			JSON(fiber.Map{"error": http.StatusText(http.StatusUnauthorized)})
-	case errors.Is(err, entities.ErrUnauthorized):
+	case errors.Is(err, entities.ErrUnauthorized), errors.Is(err, entities.ErrExpired), errors.Is(err, entities.ErrRevoked):
 		return c.Status(http.StatusUnauthorized).
 			JSON(fiber.Map{"error": http.StatusText(http.StatusUnauthorized)})
 	default:

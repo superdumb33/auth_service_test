@@ -10,6 +10,7 @@ import (
 	"github.com/superdumb33/auth-service-test/internal/controllers"
 	"github.com/superdumb33/auth-service-test/internal/infrastructure/database"
 	"github.com/superdumb33/auth-service-test/internal/infrastructure/repository/pgxrepo"
+	webhookclient "github.com/superdumb33/auth-service-test/internal/infrastructure/webhook_client"
 	"github.com/superdumb33/auth-service-test/internal/services"
 )
 
@@ -22,7 +23,8 @@ type App struct {
 func New(cfg config.AppCfg, log *slog.Logger) *App {
 	pool := database.MustInitNewPool(cfg)
 	authRepo := pgxrepo.NewPgxAuthRepo(pool)
-	authService := services.NewAuthService(authRepo, cfg.AccessTokenTTL, cfg.RefreshTokenTTL)
+	httpClient := webhookclient.MustInitNewClient(cfg.WebhookURL, log)
+	authService := services.NewAuthService(authRepo, cfg.AccessTokenTTL, cfg.RefreshTokenTTL, httpClient)
 	authController := controllers.NewAuthController(authService)
 
 	server := fiber.New(fiber.Config{

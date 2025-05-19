@@ -18,6 +18,7 @@ type AppCfg struct {
 	ApiVersion       string
 	AccessTokenTTL   time.Duration
 	RefreshTokenTTL  time.Duration
+	WebhookURL       string
 }
 
 // it'll throw a panic if something goes wrong
@@ -44,5 +45,6 @@ func MustInit() AppCfg {
 		ApiVersion:       os.Getenv("API_VERSION"),
 		AccessTokenTTL:   accessTTL,
 		RefreshTokenTTL:  refreshTTL,
+		WebhookURL:       os.Getenv("WEBHOOK_URL"),
 	}
 }

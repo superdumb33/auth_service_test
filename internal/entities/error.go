@@ -9,4 +9,5 @@ var (
 	ErrExpired = errors.New("expired")
 	ErrBadRequest = errors.New("bad request")
 	ErrUnauthorized = errors.New("unauthorized")
+	ErrRevoked = errors.New("revoked")
 )
